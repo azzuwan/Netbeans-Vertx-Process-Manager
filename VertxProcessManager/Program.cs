@@ -5,52 +5,45 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Diagnostics;
 using System.IO;
+using System.Threading;
 
 namespace VertxProcessManager
 {
-    class Program
+    class Manager
     {
-
-        public static bool isRunning(int pid)
+     
+        public Manager(string[] args)
         {
-            var process = Process.GetProcessById(pid);
-            if (process.Id == pid)
-            {
-                return true;
-            }
-            else
-            {
-                return false;
-            }
+            Args = args;
         }
+        
 
-        static void Main(string[] args)
+        public void Run()
         {
-
-            var vertxArgs = String.Join(" ", args);
+            var vertxArgs = String.Join(" ", Args);
 
             //Mimic Vertx batch file that comes with the installation
             var vertxHome = @"D:\Downloads\Vertx-3.2.0\vert.x-3.2.0-full";
-            //var vertxClasspath = vertxHome + @"\conf;" + vertxHome + @"\lib";            
+                     
             var vertxClasspath = "";
 
-            foreach( var file in Directory.GetFiles(vertxHome + "\\lib"))
+            foreach (var file in Directory.GetFiles(vertxHome + "\\lib"))
             {
                 vertxClasspath += ";" + Path.GetFullPath(file);
             }
 
             var vertxMods = Environment.GetEnvironmentVariable("VERTX_MODS");
             var vertxSycnAgent = Environment.GetEnvironmentVariable("VERTX_SYNC_AGENT");
-            var vertxJulConfig = Environment.GetEnvironmentVariable("VERTX_JUL_CONFIG");            
-            
+            var vertxJulConfig = Environment.GetEnvironmentVariable("VERTX_JUL_CONFIG");
+
             var vertxClusterMgrFactory = Environment.GetEnvironmentVariable("VERTX_CLUSTERMANAGERFACTORY");
-            
-            if(String.IsNullOrEmpty(vertxJulConfig))
+
+            if (String.IsNullOrEmpty(vertxJulConfig))
             {
                 vertxJulConfig = vertxHome + @"\conf\logging.properties";
             }
 
-            if(String.IsNullOrEmpty(vertxClusterMgrFactory))
+            if (String.IsNullOrEmpty(vertxClusterMgrFactory))
             {
                 vertxClusterMgrFactory = "io.vertx.spi.cluster.impl.hazelcast.HazelcastClusterManagerFactory";
             }
@@ -68,10 +61,10 @@ namespace VertxProcessManager
             //Set environment variables
             Environment.SetEnvironmentVariable("PATH", path + ";" + vertxHome + "\\bin");
             Environment.SetEnvironmentVariable("CLASSPATH", classpath + ";" + vertxClasspath);
-            
-            var javaCmd = "\"" +jdkHome + "\\bin\\java.exe\"";
+
+            var javaCmd = "\"" + jdkHome + "\\bin\\java.exe\"";
             var mainClass = "io.vertx.core.Launcher";
-            var arguments =  jvmOpts + " "
+            var arguments = jvmOpts + " "
                 + vertxSycnAgent + " "
                 + vertxOpts + " -Dvertx.cli.usage.prefix=vertx"
                 + " -Djava.util.logging.config.file=" + vertxJulConfig
@@ -79,8 +72,8 @@ namespace VertxProcessManager
                 + " -Dvertx.clusterManagerFactory=" + vertxClusterMgrFactory
                 + " -cp \"" + classpath + " ;" + vertxClasspath + " \""
                 + " " + mainClass
-                +" " + vertxArgs;            
-            
+                + " " + vertxArgs;
+
             //Console.WriteLine("ARGUMENTS: " + arguments);
 
             var process = new Process();
@@ -91,21 +84,22 @@ namespace VertxProcessManager
             process.StartInfo.RedirectStandardError = true;
             process.OutputDataReceived += (sender, output) => Console.WriteLine(output.Data);
             process.ErrorDataReceived += (sender, output) => Console.WriteLine(output.Data);
-           
 
-             if (File.Exists("vertx.pid"))
-             {
-                    Console.WriteLine("PID file exists!");
-                }
-             else
-             {
+
+            if (File.Exists("vertx.pid"))
+            {
+                Console.WriteLine("PID file exists!");
+            }
+            else
+            {
                 process.Start();
-                
-            
-                if (process.Id > 0) 
-                { 
 
-                    Console.WriteLine("PID: " + process.Id.ToString() );
+
+                if (process.Id > 0)
+                {
+                    Pid = process.Id;
+                    
+                    Console.WriteLine("PID: " + process.Id.ToString());
                     using (StreamWriter writer = new StreamWriter("vertx.pid"))
                     {
                         writer.WriteLine(process.Id.ToString());
@@ -114,17 +108,131 @@ namespace VertxProcessManager
                     process.BeginOutputReadLine();
                     process.BeginErrorReadLine();
                     process.WaitForExit();
-               
+
                 }
                 else
                 {
                     Console.WriteLine("Process not started");
                 }
-               
+
+            }
+        }
+
+
+        public string[] Args
+        {
+            get;
+            set;
+        }
+
+        public int Pid
+        {
+            get;
+            set;
+        }
+
+        public bool IsRunning
+        {
+            get
+            {
+                return GetStatus(Pid);
+            }
+            set{}
+        }
+
+
+        public bool GetStatus(int pid)
+        {
+            var process = Process.GetProcessById(pid);
+            if (process.Id == pid)
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        public void Start()
+        {
+            Console.WriteLine("Starting Vertx instance...");
+            Thread t = new Thread(new ThreadStart(Run));
+            t.Start();
+        }
+
+        public void Restart()
+        {
+            Console.WriteLine("Restarting Vertx instance...");
+            if(IsRunning)
+            {
+                var process = Process.GetProcessById(Pid);
+
+                try
+                {
+                    process.Kill();
+                    File.Delete("vertx.pid");
+                    Start();
+                }
+                catch(Exception ex)
+                {
+                    Console.WriteLine(ex.Message);
+                }
+            }
+            else
+            {
+                
+                try
+                {   
+                    Console.WriteLine("No instance is available to be restarted, starting a new instance");
+                    File.Delete("vertx.pid");
+                    Start();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex.Message);
+                }
+            }
+        }
+
+        public void Stop()
+        {
+            if (IsRunning)
+            {
+                var process = Process.GetProcessById(Pid);
+
+                try
+                {
+                    Console.WriteLine("Stopping Vertx instance: " + Pid);
+                    process.Kill();
+                    File.Delete("vertx.pid");
+                    
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex.Message);
+                }
+            }
+            else
+            {
+                Console.WriteLine("No Vertx instance running");
+            }
+        }
+
+        static void Main(string[] args)
+        {
+            Manager m = new Manager(args);
+            m.Start();
+            Console.Write("Waiting... ");
+            for (int i = 1; i < 31; i++ )
+            {
+                Thread.Sleep(1000);
+                Console.Write(" " + i + "...");
             }
 
-             //Console.ReadKey();
-
+            m.Stop();
+                
+            
         }
     }
 }
