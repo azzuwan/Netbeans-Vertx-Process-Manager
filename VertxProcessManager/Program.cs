@@ -6,15 +6,49 @@ using System.Threading.Tasks;
 using System.Diagnostics;
 using System.IO;
 using System.Threading;
+using SuperSocket.SocketBase;
+using SuperSocket.SocketBase.Protocol;
 
 namespace VertxProcessManager
 {
     class Manager
     {
-     
+
+        AppServer server = new AppServer();
+
         public Manager(string[] args)
         {
             Args = args;
+
+            server.NewSessionConnected += new SessionHandler<AppSession>(NewSessionHandler);
+            server.NewRequestReceived += new RequestHandler<AppSession, StringRequestInfo>(RequestHandler);
+        }
+
+        private void RequestHandler(AppSession session, StringRequestInfo requestInfo)
+        {
+            switch (requestInfo.Key.ToUpper())
+            {
+                case ("START"):
+                    session.Send("START COMMAND RECEIVED!");
+                    Start();
+                    break;
+
+                case ("STOP"):
+                    session.Send("STOP COMMAND RECEIVED!");
+                    Stop();
+                    break;
+
+                case ("RESTART"):
+
+                    session.Send("RESTART COMMAND RECEIVED!");
+                    Restart();
+                    break;
+            }
+        }
+
+        private void NewSessionHandler(AppSession session)
+        {
+            session.Send("You are connected to Vertx Process Manager");
         }
         
 
@@ -206,6 +240,11 @@ namespace VertxProcessManager
                     Console.WriteLine("Stopping Vertx instance: " + Pid);
                     process.Kill();
                     File.Delete("vertx.pid");
+                    var proc1 = Process.GetProcessById(+Pid);
+                    if(proc1.HasExited)
+                    {
+                        Console.WriteLine("Instance stopped");
+                    }
                     
                 }
                 catch (Exception ex)
@@ -219,18 +258,30 @@ namespace VertxProcessManager
             }
         }
 
+        public void TestTcpCmd()
+        {
+            server.Setup(2012);
+            server.Start();
+            
+
+
+        }
+
         static void Main(string[] args)
         {
             Manager m = new Manager(args);
-            m.Start();
-            Console.Write("Waiting... ");
-            for (int i = 1; i < 31; i++ )
-            {
-                Thread.Sleep(1000);
-                Console.Write(" " + i + "...");
-            }
+            m.TestTcpCmd();
+            //m.Start();
+            //Console.Write("Waiting... ");
+            //for (int i = 1; i < 31; i++ )
+            //{
+            //    Thread.Sleep(1000);
+            //    Console.Write(" " + i + "...");
+            //}
 
-            m.Stop();
+            //m.Stop();
+
+            Console.ReadKey();
                 
             
         }

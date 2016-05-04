@@ -48,6 +48,7 @@
       <HintPath>..\..\..\..\..\Downloads\SuperSocket(1.6.6).Binaries\Net45\Release\SuperSocket.SocketEngine.dll</HintPath>
     </Reference>
     <Reference Include="System" />
+    <Reference Include="System.Configuration" />
     <Reference Include="System.Core" />
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Data.DataSetExtensions" />
