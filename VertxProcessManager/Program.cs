@@ -26,8 +26,13 @@ namespace VertxProcessManager
 
         private void RequestHandler(AppSession session, StringRequestInfo requestInfo)
         {
+            Session = session;
             switch (requestInfo.Key.ToUpper())
             {
+                case ("TEST"):
+                    session.Send("TEST COMMAND WORKS!");
+                    break;
+
                 case ("START"):
                     session.Send("START COMMAND RECEIVED!");
                     Start();
@@ -116,12 +121,13 @@ namespace VertxProcessManager
             process.StartInfo.UseShellExecute = false;
             process.StartInfo.RedirectStandardOutput = true;
             process.StartInfo.RedirectStandardError = true;
-            process.OutputDataReceived += (sender, output) => Console.WriteLine(output.Data);
-            process.ErrorDataReceived += (sender, output) => Console.WriteLine(output.Data);
+            process.OutputDataReceived += (sender, output) => { Console.WriteLine(output.Data); Session.Send(output.Data);};
+            process.ErrorDataReceived += (sender, output) => { Console.WriteLine(output.Data); Session.Send(output.Data);};
 
 
             if (File.Exists("vertx.pid"))
             {
+                Session.Send("PID file exists");
                 Console.WriteLine("PID file exists!");
             }
             else
@@ -132,7 +138,7 @@ namespace VertxProcessManager
                 if (process.Id > 0)
                 {
                     Pid = process.Id;
-                    
+                    Session.Send("PID: "+ process.Id.ToString());
                     Console.WriteLine("PID: " + process.Id.ToString());
                     using (StreamWriter writer = new StreamWriter("vertx.pid"))
                     {
@@ -146,6 +152,7 @@ namespace VertxProcessManager
                 }
                 else
                 {
+                    Session.Send("Process not started");
                     Console.WriteLine("Process not started");
                 }
 
@@ -188,9 +195,10 @@ namespace VertxProcessManager
             }
         }
 
-        public void Start()
+        public void Start( )
         {
             Console.WriteLine("Starting Vertx instance...");
+            Session.Send("Starting Vertx instance...");
             Thread t = new Thread(new ThreadStart(Run));
             t.Start();
         }
@@ -198,6 +206,7 @@ namespace VertxProcessManager
         public void Restart()
         {
             Console.WriteLine("Restarting Vertx instance...");
+            Session.Send("Restarting Vertx instance...");
             if(IsRunning)
             {
                 var process = Process.GetProcessById(Pid);
@@ -210,6 +219,7 @@ namespace VertxProcessManager
                 }
                 catch(Exception ex)
                 {
+                    Session.Send(ex.Message);
                     Console.WriteLine(ex.Message);
                 }
             }
@@ -217,13 +227,15 @@ namespace VertxProcessManager
             {
                 
                 try
-                {   
+                {
+                    Session.Send("No instance is available to be restarted, starting a new instance");
                     Console.WriteLine("No instance is available to be restarted, starting a new instance");
                     File.Delete("vertx.pid");
                     Start();
                 }
                 catch (Exception ex)
                 {
+                    Session.Send(ex.Message);
                     Console.WriteLine(ex.Message);
                 }
             }
@@ -236,24 +248,29 @@ namespace VertxProcessManager
                 var process = Process.GetProcessById(Pid);
 
                 try
-                {
+                { 
+                    Session.Send("Stopping Vertx instance: " + Pid);
                     Console.WriteLine("Stopping Vertx instance: " + Pid);
+                   
                     process.Kill();
                     File.Delete("vertx.pid");
                     var proc1 = Process.GetProcessById(+Pid);
                     if(proc1.HasExited)
                     {
+                        Session.Send("Vertx instance stopped");
                         Console.WriteLine("Instance stopped");
                     }
                     
                 }
                 catch (Exception ex)
                 {
+                    Session.Send(ex.Message);
                     Console.WriteLine(ex.Message);
                 }
             }
             else
             {
+                Session.Send("No Vertx instance running");
                 Console.WriteLine("No Vertx instance running");
             }
         }
@@ -271,19 +288,11 @@ namespace VertxProcessManager
         {
             Manager m = new Manager(args);
             m.TestTcpCmd();
-            //m.Start();
-            //Console.Write("Waiting... ");
-            //for (int i = 1; i < 31; i++ )
-            //{
-            //    Thread.Sleep(1000);
-            //    Console.Write(" " + i + "...");
-            //}
-
-            //m.Stop();
-
             Console.ReadKey();
                 
             
         }
+
+        public AppSession Session { get; set; }
     }
 }
